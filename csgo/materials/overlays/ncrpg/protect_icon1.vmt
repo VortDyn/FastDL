@@ -1,0 +1,9 @@
+"Refract"
+{
+	"$model" 1
+ 	"$refractamount" "0"
+ 	"$bluramount" "0"
+	"$REFRACTTINT" "{200 200 200}"
+	"$REFRACTTINTtexture" "overlays/ncrpg/protect_icon1"
+	"$scale" "[1 1]"
+}
