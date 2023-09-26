@@ -1,0 +1,6 @@
+"UnlitGeneric"
+
+{
+   "$basetexture" "overlays/ncrpg/level_up_icon5"
+    "$translucent" 1
+}
