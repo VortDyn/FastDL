@@ -1,66 +1,46 @@
 <?php
-// *************************************************************************
-//  This file is part of SourceBans++.
-//
-//  Copyright (C) 2014-2016 Sarabveer Singh <me@sarabveer.me>
-//
-//  SourceBans++ is free software: you can redistribute it and/or modify
-//  it under the terms of the GNU General Public License as published by
-//  the Free Software Foundation, per version 3 of the License.
-//
-//  SourceBans++ is distributed in the hope that it will be useful,
-//  but WITHOUT ANY WARRANTY; without even the implied warranty of
-//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-//  GNU General Public License for more details.
-//
-//  You should have received a copy of the GNU General Public License
-//  along with SourceBans++. If not, see <http://www.gnu.org/licenses/>.
-//
-//  This file is based off work covered by the following copyright(s):  
-//
-//   SourceBans 1.4.11
-//   Copyright (C) 2007-2015 SourceBans Team - Part of GameConnect
-//   Licensed under GNU GPL version 3, or later.
-//   Page: <http://www.sourcebans.net/> - <https://github.com/GameConnect/sourcebansv1>
-//
-// *************************************************************************
-header("Content-Type: text/html; charset=utf-8");
+/*************************************************************************
+This file is part of SourceBans++
+
+SourceBans++ (c) 2014-2023 by SourceBans++ Dev Team
+
+The SourceBans++ Web panel is licensed under a
+Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
+
+You should have received a copy of the license along with this
+work.  If not, see <http://creativecommons.org/licenses/by-nc-sa/3.0/>.
+
+This program is based off work covered by the following copyright(s):
+SourceBans 1.4.11
+Copyright © 2007-2014 SourceBans Team - Part of GameConnect
+Licensed under CC-BY-NC-SA 3.0
+Page: <http://www.sourcebans.net/> - <http://www.gameconnect.net/>
+*************************************************************************/
+
 include_once("../init.php");
 include_once("../includes/system-functions.php");
 global $theme, $userbank;
 
-if (!$userbank->HasAccess(ADMIN_OWNER|ADMIN_ADD_SERVER))
-{
-    $log = new CSystemLog("w", "Попытка взлома", $userbank->GetProperty('user') . " пытался загрузить изображение карты, не имея на это прав.");
-	echo 'У вас нет доступа к этому!';
-	die();
+if (!$userbank->HasAccess(ADMIN_OWNER | ADMIN_ADD_SERVER)) {
+    Log::add("w", "Hacking Attempt", $userbank->GetProperty('user')." tried to upload a mapimage, but doesn't have access.");
+    die("You don't have access to this!");
 }
 
-$message = sprintf("<br /><strong>Обратите внимание!</strong><br />Максимальный размер файла: %s<br />Максимальное кол-во файлов для загрузки: %s<br /><br />", ini_get('upload_max_filesize'), ini_get('max_file_uploads'));
-if(isset($_POST['upload']))
-{
-	$fls = normalize_files_array($_FILES);
-
-	$message = '<script>alert("';
-	$fcount = count($fls['mapimg_file']);
-	foreach ($fls['mapimg_file'] as $curfile) {
-		if ($curfile['error'] != 0 || $curfile['type'] != "image/jpeg")
-			$message .= sprintf("Не удалось загрузить файл %s. Причина: %s.", $curfile['name'], getReasonByCode(($curfile['type'] != "image/jpeg")?100500:$curfile['error'], "JPG"));
-		else {
-			move_uploaded_file($curfile['tmp_name'], SB_MAP_LOCATION."/".$curfile['name']);
-			$log = new CSystemLog("m", "Изображение карты загружено", "Новое изображение карты загружено: ".htmlspecialchars($curfile['name']));
-			$message .= sprintf("Файл %s загружен.", $curfile['name']); // $curfile['name']
-		}
-		$message .= "\\n";
-	}
-	$message .= '"); self.close();</script>';
+$message = "";
+if (isset($_POST['upload'])) {
+    if (checkExtension($_FILES['mapimg_file']['name'], ['jpg'])) {
+        move_uploaded_file($_FILES['mapimg_file']['tmp_name'], SB_MAPS . "/" . $_FILES['mapimg_file']['name']);
+        $message = "<script>window.opener.mapimg('" . $_FILES['mapimg_file']['name'] . "');self.close()</script>";
+        Log::add("m", "Map Image Uploaded", "A new map image has been uploaded: $_FILES[mapimg_file][name]");
+    } else {
+        $message = "<b> File must be jpg filetype.</b><br><br>";
+    }
 }
 
-$theme->assign("title", "Загрузить изображение карты");
+$theme->assign("title", "Upload Mapimage");
 $theme->assign("message", $message);
-$theme->assign("input_name", "mapimg_file[]");
+$theme->assign("input_name", "mapimg_file");
 $theme->assign("form_name", "mapimgup");
-$theme->assign("formats", "JPG");
+$theme->assign("formats", "a JPG");
 
 $theme->display('page_uploadfile.tpl');
-?>

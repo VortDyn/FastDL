@@ -1,89 +1,50 @@
-<?php 
-// *************************************************************************
-//  This file is part of SourceBans++.
-//
-//  Copyright (C) 2014-2016 Sarabveer Singh <me@sarabveer.me>
-//
-//  SourceBans++ is free software: you can redistribute it and/or modify
-//  it under the terms of the GNU General Public License as published by
-//  the Free Software Foundation, per version 3 of the License.
-//
-//  SourceBans++ is distributed in the hope that it will be useful,
-//  but WITHOUT ANY WARRANTY; without even the implied warranty of
-//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-//  GNU General Public License for more details.
-//
-//  You should have received a copy of the GNU General Public License
-//  along with SourceBans++. If not, see <http://www.gnu.org/licenses/>.
-//
-//  This file is based off work covered by the following copyright(s):  
-//
-//   SourceBans 1.4.11
-//   Copyright (C) 2007-2015 SourceBans Team - Part of GameConnect
-//   Licensed under GNU GPL version 3, or later.
-//   Page: <http://www.sourcebans.net/> - <https://github.com/GameConnect/sourcebansv1>
-//
-// *************************************************************************
+<?php
 
-global $theme, $userbank;
+global $theme;
 
-if(isset($_GET['validation'],$_GET['email']) && !empty($_GET['email']) && !empty($_GET['validation']))
-{  
-	$email = $_GET['email'];
-	$validation = $_GET['validation'];
-	$tryHack = false;
-	
-	if (is_array($email) || is_array($validation))
-		$tryHack = true;
-	
-	if ($tryHack) {
-		CreateRedBox("Ошибка", "Была зафиксирована попытка взлома системы через некорректно построенный запрос. Данная попытка была записана в системный лог.");
-		require(TEMPLATES_PATH . "/footer.php");
-		$log = new CSystemLog("e", "Попытка взлома", "Произошла попытка взлома системы с использованием некорректно построенного запроса SQL.");
-		exit();
-	}
-	
-	preg_match("@^(?:http://)?([^/]+)@i", $_SERVER['HTTP_HOST'], $match);
+use Sbpp\Mail\EmailType;
+use Sbpp\Mail\Mail;
+use Sbpp\Mail\Mailer;
 
-	if($match[0] != $_SERVER['HTTP_HOST']) 
-	{ 
-		echo '<div class="alert alert-danger" role="alert" id="msg-red"><h4>Ошибка!</h4><span class="p-l-10">Произошла неизвестная ошибка.</span></div>';
-	
-		require(TEMPLATES_PATH . "/footer.php");
-		$log = new CSystemLog("w", "Попытка взлома", "Попытка сброса пароля с использованием: " . $_SERVER['HTTP_HOST']);
-		exit();
-	}
+if (isset($_GET['email'], $_GET['validation']) && (!empty($_GET['email']) || !empty($_GET['validation']))) {
+    $email = $_GET['email'];
+    $validation = $_GET['validation'];
 
-	if(strlen($validation) < 60)
-	{
-		echo '<div class="alert alert-danger" role="alert" id="msg-red"><h4>Ошибка!</h4><span class="p-l-10">Строка проверки является слишком короткой.</span></div>';
-	
-		require(TEMPLATES_PATH . "/footer.php");
-		exit();
-	}
-	
-	$q = $GLOBALS['db']->GetRow("SELECT aid, user FROM `" . DB_PREFIX . "_admins` WHERE `email` = ? && `validate` IS NOT NULL && `validate` = ?", array($email, $validation));
-	if($q)
-	{
-		$newpass = generate_salt(MIN_PASS_LENGTH+8);
-		$query = $GLOBALS['db']->Execute("UPDATE `" . DB_PREFIX . "_admins` SET `password` = '" . $userbank->encrypt_password($newpass) . "', validate = NULL WHERE `aid` = ?", array($q['aid']));
-		$message = "Привет " . $q['user'] . ",\n\n";
-		$message .= "Ваш пароль был успешно сброшен.\n";
-		$message .= "Ваш пароль изменен на: ".$newpass."\n\n";
-		$message .= "Войдите в ваш аккаунт SourceBans и смените пароль.\n";
+    if (is_array($email) || is_array($validation)) {
+        print "<script>ShowBox('Error', 'Invalid request.', 'red');</script>";
+        Log::add("w", "Hacking attempt", "Attempted SQL-Injection.");
+        PageDie();
+    }
 
-		$headers = 'From: SourceBans@' . $_SERVER['HTTP_HOST'] . "\n" .
-		'X-Mailer: PHP/' . phpversion();
-		$m = EMail($email, "Сброс пароля SourceBans", $message, $headers);
-		
-		echo '<div class="alert alert-success" role="alert" id="msg-blue"><h4>Успешно!</h4><span class="p-l-10">Ваш пароль был сброшен и отправлен вам на почту.<br />Проверьте папку "Спам" тоже.<br />Пожалуйста, войдите, используя этот пароль, затем смените пароль в вашей учетной записи на свой, нормальный :).</span></div>';
-	}
-	else 
-	{
-		echo '<div class="alert alert-danger" role="alert" id="msg-red"><h4>Ошибка!</h4><span class="p-l-10">Строка проверки не соответствует адресу электронной почты для запроса на сброс.</span></div>';
-	}
-}else 
-{
-	$theme->display('page_lostpassword.tpl');
+    if (strlen($validation) < 10) {
+        print "<script>ShowBox('Error', 'Invalid validation string.', 'red');</script>";
+        PageDie();
+    }
+
+    $GLOBALS['PDO']->query("SELECT aid, user FROM `:prefix_admins` WHERE `email` = :email AND `validate` = :validate");
+    $GLOBALS['PDO']->bind(':email', $email);
+    $GLOBALS['PDO']->bind(':validate', $validation);
+    $result = $GLOBALS['PDO']->single();
+
+    if (empty($result['aid']) || is_null($result['aid'])) {
+        print "<script>ShowBox('Error', 'The validation string does not match the email for this reset request.', 'red');</script>";
+        PageDie();
+    }
+
+    $password = Crypto::genSecret(MIN_PASS_LENGTH + 8);
+    $GLOBALS['PDO']->query("UPDATE `:prefix_admins` SET `password` = :password, `validate` = NULL WHERE `aid` = :aid");
+    $GLOBALS['PDO']->bind(':password', password_hash($password, PASSWORD_BCRYPT));
+    $GLOBALS['PDO']->bind(':aid', $result['aid']);
+    $GLOBALS['PDO']->execute();
+
+    $isEmailSent = Mail::send($email, EmailType::PasswordResetSuccess, [
+        '{password}' => $password,
+        '{name}' => $result['user'],
+        '{home}' => Host::complete(true)
+    ]);
+
+    print "<script>ShowBox('Password Reset', 'Your password has been reset and sent to your email.<br />Please check your spam folder too.<br />Please login using this password, <br />then use the change password link in Your Account.', 'blue');</script>";
+    PageDie();
+} else {
+    $theme->display('page_lostpassword.tpl');
 }
-?>

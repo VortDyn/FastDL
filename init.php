@@ -1,29 +1,31 @@
 <?php
-// *************************************************************************
-//  This file is part of SourceBans++.
-//
-//  Copyright (C) 2014-2016 Sarabveer Singh <me@sarabveer.me>
-//
-//  SourceBans++ is free software: you can redistribute it and/or modify
-//  it under the terms of the GNU General Public License as published by
-//  the Free Software Foundation, per version 3 of the License.
-//
-//  SourceBans++ is distributed in the hope that it will be useful,
-//  but WITHOUT ANY WARRANTY; without even the implied warranty of
-//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-//  GNU General Public License for more details.
-//
-//  You should have received a copy of the GNU General Public License
-//  along with SourceBans++. If not, see <http://www.gnu.org/licenses/>.
-//
-//  This file is based off work covered by the following copyright(s):  
-//
-//   SourceBans 1.4.11
-//   Copyright (C) 2007-2015 SourceBans Team - Part of GameConnect
-//   Licensed under GNU GPL version 3, or later.
-//   Page: <http://www.sourcebans.net/> - <https://github.com/GameConnect/sourcebansv1>
-//
-// *************************************************************************
+/*************************************************************************
+This file is part of SourceBans++
+
+SourceBans++ (c) 2014-2023 by SourceBans++ Dev Team
+
+The SourceBans++ Web panel is licensed under a
+Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
+
+You should have received a copy of the license along with this
+work.  If not, see <http://creativecommons.org/licenses/by-nc-sa/3.0/>.
+
+This program is based off work covered by the following copyright(s):
+SourceBans 1.4.11
+Copyright © 2007-2014 SourceBans Team - Part of GameConnect
+Licensed under CC-BY-NC-SA 3.0
+Page: <http://www.sourcebans.net/> - <http://www.gameconnect.net/>
+*************************************************************************/
+//Hotfix for dash_intro_text
+if (isset($_POST['dash_intro_text'])) {
+    $dash_intro_text = $_POST['dash_intro_text'];
+}
+//Filter all user inputs
+//Should be changed to individual filtering
+$_GET = filter_input_array(INPUT_GET, FILTER_SANITIZE_SPECIAL_CHARS);
+$_POST = filter_input_array(INPUT_POST, FILTER_SANITIZE_SPECIAL_CHARS);
+$_COOKIE = filter_input_array(INPUT_COOKIE, FILTER_SANITIZE_SPECIAL_CHARS);
+//$_SERVER = filter_input_array(INPUT_SERVER, FILTER_SANITIZE_SPECIAL_CHARS);
 
 // ---------------------------------------------------
 //  Directories
@@ -32,286 +34,178 @@ define('ROOT', dirname(__FILE__) . "/");
 define('SCRIPT_PATH', ROOT . 'scripts');
 define('TEMPLATES_PATH', ROOT . 'pages');
 define('INCLUDES_PATH', ROOT . 'includes');
-define('SB_DEMO_LOCATION','demos');
-define('SB_ICON_LOCATION','images/games');
-define('SB_MAP_LOCATION', ROOT . 'images/maps');
-define('SB_ICONS', ROOT . SB_ICON_LOCATION);
+define('SB_MAP_LOCATION',  'images/maps');
+define('SB_DEMO_LOCATION', 'demos');
+define('SB_ICON_LOCATION', 'images/games');
+define('SB_MAPS',  ROOT . SB_MAP_LOCATION);
 define('SB_DEMOS', ROOT . SB_DEMO_LOCATION);
+define('SB_ICONS', ROOT . SB_ICON_LOCATION);
 
 define('SB_THEMES', ROOT . 'themes/');
-define('SB_THEMES_COMPILE', ROOT . 'themes_c/');
+define('SB_CACHE', ROOT . 'cache/');
+
+define("MMDB_PATH", ROOT . 'data/GeoLite2-Country.mmdb');
 
 define('IN_SB', true);
-define('SB_AID', isset($_COOKIE['aid'])?$_COOKIE['aid']:null);
-define('XAJAX_REQUEST_URI', './index.php');
-
-include_once(INCLUDES_PATH . "/CSystemLog.php");
-include_once(INCLUDES_PATH . "/CUserManager.php");
-include_once(INCLUDES_PATH . "/CUI.php");
-include_once("themes/new_box/theme.conf.php");
-// ---------------------------------------------------
-//  Fix some $_SERVER vars
-// ---------------------------------------------------
-// Fix for IIS, which doesn't set REQUEST_URI
-if(!isset($_SERVER['REQUEST_URI']) || trim($_SERVER['REQUEST_URI']) == '') 
-{ $_SERVER['REQUEST_URI'] = $_SERVER['SCRIPT_NAME'];
-    if (isset($_SERVER['QUERY_STRING']) && !empty($_SERVER['QUERY_STRING'])) 
-    { $_SERVER['REQUEST_URI'] .= '?' . $_SERVER['QUERY_STRING']; } 
-} 
-// Fix for Dreamhost and other PHP as CGI hosts
-if(strstr($_SERVER['SCRIPT_NAME'], 'php.cgi')) unset($_SERVER['PATH_INFO']);
-if(trim($_SERVER['PHP_SELF']) == '') $_SERVER['PHP_SELF'] = preg_replace("/(\?.*)?$/",'', $_SERVER["REQUEST_URI"]);
 
 // ---------------------------------------------------
 //  Are we installed?
 // ---------------------------------------------------
-if(!file_exists(ROOT.'/config.php') || !include_once(ROOT . '/config.php')) {
-	// No were not
-	if($_SERVER['HTTP_HOST'] != "localhost")
-	{
-		echo "SourceBans не установлен.";
-		die();
-	}
+#DB Config
+if (!file_exists(ROOT.'/config.php')) {
+    die('SourceBans++ is not installed.');
 }
-if(!defined("DEVELOPER_MODE") && !defined("IS_UPDATE") && file_exists(ROOT."/install"))
-{
-	if($_SERVER['HTTP_HOST'] != "localhost")
-	{
-		echo "Из соображений безопасности, удалите, Пожалуйста, директорию /install/ с сервера перед тем, как работать с системой.";
-		die();
-	}
+require_once(ROOT.'/config.php');
+
+if ($_SERVER['HTTP_HOST'] != "localhost" && !defined("IS_UPDATE")) {
+    if (file_exists(ROOT."/install")) {
+        die('Please delete the install directory before you use SourceBans++.');
+    } else if (file_exists(ROOT."/updater")) {
+        die('Please delete the updater directory before using SourceBans++.');
+    }
 }
 
-if(!defined("DEVELOPER_MODE") && !defined("IS_UPDATE") && file_exists(ROOT."/updater"))
-{
-	if($_SERVER['HTTP_HOST'] != "localhost")
-	{
-		echo "Выполняется редирект на обновление SourceBans...";
-		echo "<script>setTimeout(function() { window.location.replace('./updater'); }, 2000);</script>";
-		die();
-	}
+#Composer autoload
+if (!file_exists(INCLUDES_PATH.'/vendor/autoload.php')) {
+    die('Compose autoload not found! Run `composer install` in the root directory of your SourceBans++ installation.');
 }
+require_once(INCLUDES_PATH.'/vendor/autoload.php');
 
 // ---------------------------------------------------
 //  Initial setup
 // ---------------------------------------------------
+require_once(INCLUDES_PATH.'/security/Crypto.php');
 
-if(!defined('SB_VERSION')){
-	define('SB_VERSION', '1.5.4.7');
-	define('MA_BRANCH', 'master');
-}
-define('LOGIN_COOKIE_LIFETIME', (60*60*24*7)*2);
-define('COOKIE_PATH', '/');
-define('COOKIE_DOMAIN', '');
-define('COOKIE_SECURE', false);
-define('SB_SALT', 'SourceBans');
+require_once(INCLUDES_PATH.'/auth/JWT.php');
 
-// ---------------------------------------------------
-//  Setup PHP
-// ---------------------------------------------------
-ini_set('include_path', '.:/php/includes:' . INCLUDES_PATH .'/adodb');
-ini_set('date.timezone', 'GMT');
+require_once(INCLUDES_PATH.'/auth/handler/NormalAuthHandler.php');
+require_once(INCLUDES_PATH.'/auth/handler/SteamAuthHandler.php');
 
-if(defined("SB_MEM"))
-	ini_set('memory_limit', SB_MEM);
+require_once(INCLUDES_PATH.'/auth/Auth.php');
+require_once(INCLUDES_PATH.'/auth/Host.php');
 
-ini_set('display_errors', 1);
-error_reporting(E_ALL ^ E_NOTICE);
+require_once(INCLUDES_PATH.'/CUserManager.php');
+require_once(INCLUDES_PATH.'/AdminTabs.php');
 
+$version = @json_decode(file_get_contents('configs/version.json'), true);
+define('SB_VERSION', $version['version'] ?? 'N/A');
+define('SB_GITREV', $version['git'] ??  0);
+define('SB_DEV', $version['dev'] ?? false);
 
 // ---------------------------------------------------
 //  Setup our DB
 // ---------------------------------------------------
-include_once(INCLUDES_PATH . "/adodb/adodb.inc.php");
-include_once(INCLUDES_PATH . "/adodb/adodb-errorhandler.inc.php");
-$GLOBALS['db'] = ADONewConnection("mysqli://".DB_USER.':'.DB_PASS.'@'.DB_HOST.':'.DB_PORT.'/'.DB_NAME);
-$GLOBALS['log'] = new CSystemLog();
-
-if( !is_object($GLOBALS['db']) )
-				die();
-				
-$mysql_server_info = $GLOBALS['db']->ServerInfo();
-$GLOBALS['db_version'] = $mysql_server_info['version'];
-
-$debug = $GLOBALS['db']->Execute("SELECT value FROM `".DB_PREFIX."_settings` WHERE setting = 'config.debug';");
-if($debug->fields['value']=="1") {
-	define("DEVELOPER_MODE", true);
+if (!defined('DB_CHARSET')) {
+    define('DB_CHARSET', 'utf8');
 }
 
-// ---------------------------------------------------
-//  Setup our custom error handler
-// ---------------------------------------------------
-require_once(INCLUDES_PATH . '/CErrorHandler.php');
-$GLOBALS['error_manager'] = new CErrorHandler();
-
-// ---------------------------------------------------
-//  Some defs
-// ---------------------------------------------------
-define('EMAIL_FORMAT', "/^([a-zA-Z0-9])+([a-zA-Z0-9\._-])*@([a-zA-Z0-9_-])+([a-zA-Z0-9\._-]+)+$/");
-define('URL_FORMAT', "/^(http|https):\/\/[a-z0-9]+([\-\.]{1}[a-z0-9]+)*\.[a-z]{2,5}((:[0-9]{1,5})?\/.*)?$/i");
-define('STEAM_FORMAT', "/^STEAM_[0-9]:[0-9]:[0-9]+$/");
-define('STATUS_PARSE', '/# +([0-9 ]+) +"(.+)" +(STEAM_[0-9]:[0-9]:[0-9]+|\[U:[0-9]:[0-9]+\]) +([0-9:]+) +([0-9]+) +([0-9]+) +([a-zA-Z]+) +([0-9.:]+)/');
-define('IP_FORMAT', '/\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b/');
-define('SERVER_QUERY', 'http://www.sourcebans.net/public/query/');
-
-// Web admin-flags
-define('ADMIN_LIST_ADMINS', 	(1<<0));
-define('ADMIN_ADD_ADMINS', 		(1<<1));
-define('ADMIN_EDIT_ADMINS', 	(1<<2));
-define('ADMIN_DELETE_ADMINS', 	(1<<3));
-
-define('ADMIN_LIST_SERVERS', 	(1<<4));
-define('ADMIN_ADD_SERVER', 		(1<<5));
-define('ADMIN_EDIT_SERVERS', 	(1<<6));
-define('ADMIN_DELETE_SERVERS', 	(1<<7));
-
-define('ADMIN_ADD_BAN', 		(1<<8));
-define('ADMIN_EDIT_OWN_BANS', 	(1<<10));
-define('ADMIN_EDIT_GROUP_BANS', (1<<11));
-define('ADMIN_EDIT_ALL_BANS', 	(1<<12));
-define('ADMIN_BAN_PROTESTS', 	(1<<13));
-define('ADMIN_BAN_SUBMISSIONS', (1<<14));
-define('ADMIN_DELETE_BAN',		(1<<25));
-define('ADMIN_UNBAN', 			(1<<26));
-define('ADMIN_BAN_IMPORT',		(1<<27));
-define('ADMIN_UNBAN_OWN_BANS',	(1<<30));
-define('ADMIN_UNBAN_GROUP_BANS',(1<<31));
-
-define('ADMIN_LIST_GROUPS', 	(1<<15));
-define('ADMIN_ADD_GROUP', 		(1<<16));
-define('ADMIN_EDIT_GROUPS', 	(1<<17));
-define('ADMIN_DELETE_GROUPS', 	(1<<18));
-
-define('ADMIN_WEB_SETTINGS', 	(1<<19));
-
-define('ADMIN_LIST_MODS', 		(1<<20));
-define('ADMIN_ADD_MODS', 		(1<<21));
-define('ADMIN_EDIT_MODS', 		(1<<22));
-define('ADMIN_DELETE_MODS', 	(1<<23));
-
-define('ADMIN_NOTIFY_SUB',	(1<<28));
-define('ADMIN_NOTIFY_PROTEST',	(1<<29));
-
-define('ADMIN_OWNER', 			(1<<24));
-
-// Server admin-flags
-define('SM_RESERVED_SLOT', 		"a");
-define('SM_GENERIC', 			"b");
-define('SM_KICK', 				"c");
-define('SM_BAN', 				"d");
-define('SM_UNBAN', 				"e");
-define('SM_SLAY', 				"f");
-define('SM_MAP', 				"g");
-define('SM_CVAR', 				"h");
-define('SM_CONFIG', 			"i");
-define('SM_CHAT', 				"j");
-define('SM_VOTE',				"k");
-define('SM_PASSWORD', 			"l");
-define('SM_RCON', 				"m");
-define('SM_CHEATS', 			"n");
-define('SM_ROOT', 				"z");
-
-define('SM_CUSTOM1', 			"o");
-define('SM_CUSTOM2', 			"p");
-define('SM_CUSTOM3', 			"q");
-define('SM_CUSTOM4', 			"r");
-define('SM_CUSTOM5', 			"s");
-define('SM_CUSTOM6', 			"t");
-
-
-define('ALL_WEB', ADMIN_LIST_ADMINS|ADMIN_ADD_ADMINS|ADMIN_EDIT_ADMINS|ADMIN_DELETE_ADMINS|ADMIN_LIST_SERVERS|ADMIN_ADD_SERVER|
-				  ADMIN_EDIT_SERVERS|ADMIN_DELETE_SERVERS|ADMIN_ADD_BAN|ADMIN_EDIT_OWN_BANS|ADMIN_EDIT_GROUP_BANS|
-				  ADMIN_EDIT_ALL_BANS|ADMIN_BAN_PROTESTS|ADMIN_BAN_SUBMISSIONS|ADMIN_LIST_GROUPS|ADMIN_ADD_GROUP|ADMIN_EDIT_GROUPS|
-				  ADMIN_DELETE_GROUPS|ADMIN_WEB_SETTINGS|ADMIN_LIST_MODS|ADMIN_ADD_MODS|ADMIN_EDIT_MODS|ADMIN_DELETE_MODS|ADMIN_OWNER|
-				  ADMIN_DELETE_BAN|ADMIN_UNBAN|ADMIN_BAN_IMPORT|ADMIN_UNBAN_OWN_BANS|ADMIN_UNBAN_GROUP_BANS|ADMIN_NOTIFY_SUB|ADMIN_NOTIFY_PROTEST);
-
-define('ALL_SERVER', SM_RESERVED_SLOT.SM_GENERIC.SM_KICK.SM_BAN.SM_UNBAN.SM_SLAY.SM_MAP.SM_CVAR.SM_CONFIG.SM_VOTE.SM_PASSWORD.SM_RCON.
-					 SM_CHEATS.SM_CUSTOM1.SM_CUSTOM2.SM_CUSTOM3. SM_CUSTOM4.SM_CUSTOM5.SM_CUSTOM6.SM_ROOT);
-
-$GLOBALS['db']->Execute("SET NAMES utf8;");
-					 
-$res = $GLOBALS['db']->Execute("SELECT * FROM ".DB_PREFIX."_settings GROUP BY `setting`, `value`");
-$GLOBALS['config'] = array();
-while (!$res->EOF)
-{
-	$setting = array($res->fields['setting'] => $res->fields['value']);
-	$GLOBALS['config'] = array_merge_recursive($GLOBALS['config'], $setting);
-	$res->MoveNext();
+if (!defined('SB_EMAIL')) {
+    define('SB_EMAIL', '');
 }
 
-define('SB_BANS_PER_PAGE', $GLOBALS['config']['banlist.bansperpage']);
-define('MIN_PASS_LENGTH', $GLOBALS['config']['config.password.minlength']);
-$dateformat = !empty($GLOBALS['config']['config.dateformat'])?$GLOBALS['config']['config.dateformat']:"m-d-y H:i";
+//include_once(INCLUDES_PATH . "/adodb/adodb.inc.php");
+//include_once(INCLUDES_PATH . "/adodb/adodb-errorhandler.inc.php");
+require_once(INCLUDES_PATH.'/Database.php');
+$GLOBALS['db'] =  ADONewConnection("mysqli://".DB_USER.':'.urlencode(DB_PASS).'@'.DB_HOST.':'.DB_PORT.'/'.DB_NAME);
+$GLOBALS['PDO'] = new Database(DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASS, DB_PREFIX, DB_CHARSET);
 
-if(version_compare(PHP_VERSION, "5") != -1)
-{
-    $offset = (empty($GLOBALS['config']['config.timezone'])?0:$GLOBALS['config']['config.timezone'])*3600;
-    date_default_timezone_set("GMT");
-    $abbrarray = timezone_abbreviations_list();
-    foreach ($abbrarray as $abbr) {
-        foreach ($abbr as $city) {
-            if ($city['offset'] == $offset && $city['dst'] == $GLOBALS['config']['config.summertime']) {
-                date_default_timezone_set($city['timezone_id']);
-                break 2;
-            }
-        }
-    }
-}
-else 
-{
-    if(empty($GLOBALS['config']['config.timezone']))
-    {
-        define('SB_TIMEZONE', 0);
-    } else {
-        define('SB_TIMEZONE', $GLOBALS['config']['config.timezone']);
-    }
+if (!is_object($GLOBALS['db'])) {
+    die();
 }
 
-// if(empty($GLOBALS['config']['config.timezone']))
-// {
-	// date_default_timezone_set("Europe/London");
-// }else{
-	// date_default_timezone_set($GLOBALS['config']['config.timezone']);
-// }
+$GLOBALS['db']->Execute("SET NAMES ".DB_CHARSET.";");
 
+require_once(INCLUDES_PATH.'/SteamID/bootstrap.php');
+\SteamID\SteamID::init($GLOBALS['PDO']);
 
-// ---------------------------------------------------
-// Setup our templater
-// ---------------------------------------------------
-require(INCLUDES_PATH . '/smarty/Smarty.class.php');
+require_once(INCLUDES_PATH.'/Config.php');
+Config::init($GLOBALS['PDO']);
 
-global $theme, $userbank;
+define("DEBUG_MODE", Config::getBool('config.debug'));
 
-define('SB_THEME', 'new_box');
-
-if(!@file_exists(SB_THEMES . SB_THEME . "/theme.conf.php"))
-	die("<b>Ошибка шаблона</b>: Шаблон повреждён. Отсутствует файл <b>theme.conf.php</b>.");
-
-if(!@is_writable(SB_THEMES_COMPILE))
-	die("<b>Ошибка шаблона</b>: Папка <b>".SB_THEMES_COMPILE."</b> не перезаписываемая! Установите права 777 на папку через FTP-клиент.");
-
-$theme = new Smarty();
-$theme->error_reporting 	= 	E_ALL ^ E_NOTICE;
-$theme->use_sub_dirs 		= 	false;
-$theme->compile_id			= 	SB_THEME;
-$theme->caching 			= 	false;
-$theme->template_dir 		= 	SB_THEMES . SB_THEME;
-$theme->compile_dir 		= 	SB_THEMES_COMPILE;
-
-if ((isset($_GET['debug']) && $_GET['debug'] == 1) || defined("DEVELOPER_MODE") )
-{
-	$theme->force_compile = true;
+if (DEBUG_MODE) {
+    ini_set('display_errors', 1);
+    error_reporting(E_ALL ^ E_NOTICE);
 }
+
+Auth::init($GLOBALS['PDO']);
 
 // ---------------------------------------------------
 // Setup our user manager
 // ---------------------------------------------------
-$l = '';
-$p = '';
-if (!defined('IS_UPDATE') && isset($_COOKIE['aid']))
-    $l = $_COOKIE['aid'];
-if (!defined('IS_UPDATE') && isset($_COOKIE['password']))
-    $p = $_COOKIE['password'];
 
-$userbank = new CUserManager($l, $p);
-?>
+$userbank = new CUserManager(Auth::verify());
+
+require_once(INCLUDES_PATH.'/Log.php');
+Log::init($GLOBALS['PDO'], $userbank);
+
+// ---------------------------------------------------
+//  Setup our custom error handler
+// ---------------------------------------------------
+set_error_handler('sbError');
+function sbError($errno, $errstr, $errfile, $errline)
+{
+    switch ($errno) {
+        case E_USER_ERROR:
+            Log::add('e', 'PHP Error', "[$errno] $errstr\nFatal Error on line $errline in file $errfile");
+            return true;
+        case E_USER_WARNING:
+            Log::add('w', 'PHP Warning', "[$errno] $errstr\nError on line $errline in file $errfile");
+            return true;
+        case E_USER_NOTICE:
+            Log::add('m', 'PHP Notice', "[$errno] $errstr\nNotice on line $errline in file $errfile");
+            return true;
+        default:
+            return false;
+    }
+}
+
+$webflags = json_decode(file_get_contents(ROOT.'/configs/permissions/web.json'), true);
+foreach ($webflags as $flag => $perm) {
+    define($flag, $perm['value']);
+}
+$smflags = json_decode(file_get_contents(ROOT.'/configs/permissions/sourcemod.json'), true);
+foreach ($smflags as $flag => $perm) {
+    define($flag, $perm['value']);
+}
+
+define('SB_BANS_PER_PAGE', Config::get('banlist.bansperpage'));
+define('MIN_PASS_LENGTH', Config::get('config.password.minlength'));
+
+// ---------------------------------------------------
+// Setup our templater
+// ---------------------------------------------------
+
+global $theme, $userbank;
+
+$theme_name = (Config::getBool('config.theme')) ? Config::get('config.theme') : 'default';
+if (defined("IS_UPDATE")) {
+    $theme_name = "default";
+}
+define('SB_THEME', $theme_name);
+
+if (!@file_exists(SB_THEMES . $theme_name . "/theme.conf.php")) {
+    die("Theme Error: <b>".$theme_name."</b> is not a valid theme. Must have a valid <b>theme.conf.php</b> file.");
+}
+if (!@is_writable(SB_CACHE)) {
+    die("Theme Error: <b>".SB_CACHE."</b> MUST be writable.");
+}
+
+require_once(INCLUDES_PATH.'/SmartyCustomFunctions.php');
+
+$theme = new Smarty();
+$theme->error_reporting = E_ALL;
+$theme->use_sub_dirs = false;
+$theme->compile_id = $theme_name;
+$theme->setCaching(Smarty::CACHING_OFF);
+$theme->setTemplateDir(SB_THEMES . $theme_name);
+$theme->setCacheDir(SB_CACHE);
+$theme->registerPlugin(Smarty::PLUGIN_FUNCTION, 'help_icon', 'smarty_function_help_icon');
+$theme->registerPlugin(Smarty::PLUGIN_FUNCTION, 'sb_button', 'smarty_function_sb_button');
+$theme->registerPlugin(Smarty::PLUGIN_FUNCTION, 'load_template', 'smarty_function_load_template');
+$theme->registerPlugin('modifier', 'smarty_stripslashes', 'smarty_stripslashes');
+$theme->registerPlugin('modifier', 'smarty_htmlspecialchars', 'smarty_htmlspecialchars');
+
+if ((isset($_GET['debug']) && $_GET['debug'] == 1) || DEBUG_MODE) {
+    $theme->force_compile = true;
+}

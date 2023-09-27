@@ -1,199 +1,225 @@
 <?php
-// *************************************************************************
-//  This file is part of SourceBans++.
-//
-//  Copyright (C) 2014-2016 Sarabveer Singh <me@sarabveer.me>
-//
-//  SourceBans++ is free software: you can redistribute it and/or modify
-//  it under the terms of the GNU General Public License as published by
-//  the Free Software Foundation, per version 3 of the License.
-//
-//  SourceBans++ is distributed in the hope that it will be useful,
-//  but WITHOUT ANY WARRANTY; without even the implied warranty of
-//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-//  GNU General Public License for more details.
-//
-//  You should have received a copy of the GNU General Public License
-//  along with SourceBans++. If not, see <http://www.gnu.org/licenses/>.
-//
-//  This file is based off work covered by the following copyright(s):  
-//
-//   SourceBans 1.4.11
-//   Copyright (C) 2007-2015 SourceBans Team - Part of GameConnect
-//   Licensed under GNU GPL version 3, or later.
-//   Page: <http://www.sourcebans.net/> - <https://github.com/GameConnect/sourcebansv1>
-//
-// *************************************************************************
+/*************************************************************************
+This file is part of SourceBans++
 
-global $userbank, $ui, $theme;
-if(!defined("IN_SB")){echo "Ошибка доступа!";die();}
-if($GLOBALS['config']['config.enablesubmit']!="1")
-{
-	CreateRedBox("Ошибка", "Страница отключена.");
-	PageDie();
+SourceBans++ (c) 2014-2023 by SourceBans++ Dev Team
+
+The SourceBans++ Web panel is licensed under a
+Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
+
+You should have received a copy of the license along with this
+work.  If not, see <http://creativecommons.org/licenses/by-nc-sa/3.0/>.
+
+This program is based off work covered by the following copyright(s):
+SourceBans 1.4.11
+Copyright © 2007-2014 SourceBans Team - Part of GameConnect
+Licensed under CC-BY-NC-SA 3.0
+Page: <http://www.sourcebans.net/> - <http://www.gameconnect.net/>
+*************************************************************************/
+
+global $userbank, $theme;
+
+use Sbpp\Mail\EmailType;
+use Sbpp\Mail\Mail;
+use Sbpp\Mail\Mailer;
+use xPaw\SourceQuery\SourceQuery;
+
+if (!defined("IN_SB")) {
+    echo "You should not be here. Only follow links!";
+    die();
+}
+if (!Config::getBool('config.enablesubmit')) {
+    print "<script>ShowBox('Error', 'This page is disabled. You should not be here.', 'red');</script>";
+    PageDie();
+}
+if (!isset($_POST['subban']) || $_POST['subban'] != 1) {
+    $SteamID       = "";
+    $BanIP         = "";
+    $PlayerName    = "";
+    $BanReason     = "";
+    $SubmitterName = "";
+    $Email         = "";
+    $SID           = -1;
+} else {
+    $SteamID       = trim(htmlspecialchars($_POST['SteamID']));
+    $BanIP         = trim(htmlspecialchars($_POST['BanIP']));
+    $PlayerName    = htmlspecialchars($_POST['PlayerName']);
+    $BanReason     = htmlspecialchars($_POST['BanReason']);
+    $SubmitterName = htmlspecialchars($_POST['SubmitName']);
+    $Email         = trim(htmlspecialchars($_POST['EmailAddr']));
+    $SID           = (int) $_POST['server'];
+    $validsubmit   = true;
+    $errors        = "";
+    if ((strlen($SteamID) != 0 && $SteamID != "STEAM_0:") && !\SteamID\SteamID::isValidID($SteamID)) {
+        $errors .= '* Please type a valid STEAM ID.<br>';
+        $validsubmit = false;
+    }
+    if (strlen($BanIP) != 0 && !filter_var($BanIP, FILTER_VALIDATE_IP)) {
+        $errors .= '* Please type a valid IP-address.<br>';
+        $validsubmit = false;
+    }
+    if (strlen($PlayerName) == 0) {
+        $errors .= '* You must include a player name<br>';
+        $validsubmit = false;
+    }
+    if (strlen($BanReason) == 0) {
+        $errors .= '* You must include comments<br>';
+        $validsubmit = false;
+    }
+    if (!filter_var($Email, FILTER_VALIDATE_EMAIL)) {
+        $errors .= '* You must include a valid email address<br>';
+        $validsubmit = false;
+    }
+    if ($SID == -1) {
+        $errors .= '* Please select a server.<br>';
+        $validsubmit = false;
+    }
+    if (!empty($_FILES['demo_file']['name'])) {
+        if (!checkExtension($_FILES['demo_file']['name'], ['zip', 'rar', 'dem', '7z', 'bz2', 'gz'])) {
+            $errors .= '* A demo can only be a dem, zip, rar, 7z, bz2 or a gz filetype.<br>';
+            $validsubmit = false;
+        }
+    }
+    $checkres = $GLOBALS['db']->Execute("SELECT length FROM " . DB_PREFIX . "_bans WHERE authid = ? AND RemoveType IS NULL", array(
+        $SteamID
+    ));
+    $numcheck = $checkres->RecordCount();
+    if ($numcheck == 1 && $checkres->fields['length'] == 0) {
+        $errors .= '* The player is already banned permanent.<br>';
+        $validsubmit = false;
+    }
+
+
+    if (!$validsubmit) {
+        print "<script>ShowBox('Error', '$errors', 'red');</script>";
+    }
+
+    if ($validsubmit) {
+        $filename = md5($SteamID . time());
+        //echo SB_DEMOS."/".$filename;
+        $demo     = move_uploaded_file($_FILES['demo_file']['tmp_name'], SB_DEMOS . "/" . $filename);
+        if ($demo || empty($_FILES['demo_file']['name'])) {
+            if ($SID != 0) {
+                $GLOBALS['PDO']->query("SELECT ip, port FROM `:prefix_servers` WHERE sid = :sid");
+                $GLOBALS['PDO']->bind(':sid', $SID);
+                $server = $GLOBALS['PDO']->single();
+
+                $query = new SourceQuery();
+                try {
+                    $query->Connect($server['ip'], $server['port'], 1, SourceQuery::SOURCE);
+                    $info = $query->GetInfo();
+                } catch (Exception $e) {
+                    $mailserver = "Server: Error Connecting (".$server['ip'].":".$server['port'].")\n";
+                } finally {
+                    $query->Disconnect();
+                }
+
+                if (!empty($info['HostName'])) {
+                    $mailserver = "Server: ".$info['HostName']." (".$server['ip'].":".$server['port'].")\n";
+                } else {
+                    $mailserver = "Server: Error Connecting (".$server['ip'].":".$server['port'].")\n";
+                }
+
+                $GLOBALS['PDO']->query("SELECT m.mid FROM `:prefix_servers` as s LEFT JOIN `:prefix_mods` as m ON m.mid = s.modid WHERE s.sid = :sid");
+                $GLOBALS['PDO']->bind(':sid', $SID);
+                $modid = $GLOBALS['PDO']->single();
+            } else {
+                $mailserver = "Server: Other server\n";
+                $modid['mid']   = 0;
+            }
+            if ($SteamID == "STEAM_0:") {
+                $SteamID = "";
+            }
+            $pre = $GLOBALS['db']->Prepare("INSERT INTO " . DB_PREFIX . "_submissions(submitted,SteamId,name,email,ModID,reason,ip,subname,sip,archiv,server) VALUES (UNIX_TIMESTAMP(),?,?,?,?,?,?,?,?,0,?)");
+            $GLOBALS['db']->Execute($pre, array(
+                $SteamID,
+                $PlayerName,
+                $Email,
+                $modid['mid'],
+                $BanReason,
+                $_SERVER['REMOTE_ADDR'],
+                $SubmitterName,
+                $BanIP,
+                $SID
+            ));
+            $subid = (int) $GLOBALS['db']->Insert_ID();
+
+            if (!empty($_FILES['demo_file']['name'])) {
+                $GLOBALS['db']->Execute("INSERT INTO " . DB_PREFIX . "_demos(demid,demtype,filename,origname) VALUES (?, 'S', ?, ?)", array(
+                    $subid,
+                    $filename,
+                    $_FILES['demo_file']['name']
+                ));
+            }
+            $SteamID       = "";
+            $BanIP         = "";
+            $PlayerName    = "";
+            $BanReason     = "";
+            $SubmitterName = "";
+            $Email         = "";
+            $SID           = -1;
+
+            // Send an email when ban was posted
+            $headers = 'From: ' . SB_EMAIL . "\n" . 'X-Mailer: PHP/' . phpversion();
+
+            $admins = $userbank->GetAllAdmins();
+            $requri = substr($_SERVER['REQUEST_URI'], 0, strrpos($_SERVER['REQUEST_URI'], ".php") - 5);
+            $mailDests = [];
+
+            foreach ($admins as $admin) {
+                if ($userbank->HasAccess(ADMIN_OWNER | ADMIN_BAN_SUBMISSIONS, $admin['aid']) || $userbank->HasAccess(ADMIN_NOTIFY_SUB, $admin['aid'])) {
+                    $mailDests []= $admin['email'];
+                }
+            }
+
+            if (count($mailDests) > 0)
+            {
+                $demoLink = empty($_FILES['demo_file']['name']) ? 'no' : 'yes (http://' . $_SERVER['HTTP_HOST'] . $requri . 'getdemo.php?type=S&id=' . $subid . ')';
+
+                $isEmailSent = Mail::send($mailDests, EmailType::BanSubmission, [
+                    '{admin}' => 'admin',
+                    '{name}' => $_POST['PlayerName'],
+                    '{steamid}' => $_POST['SteamdID'] ?? 'NA',
+                    '{demo}' => $demoLink,
+                    '{server}' => $mailserver,
+                    '{reason}' => $_POST['BanReason'],
+                    '{home}' => Host::complete(true),
+                    '{link}' => Host::complete(true) . '/index.php?p=admin&c=bans#%5E2'
+                ]);
+            }
+
+            print "<script>ShowBox('Successful', 'Your submission has been added into the database, and will be reviewed by one of our admins.', 'green');</script>";
+        } else {
+            print "<script>ShowBox('Error', 'There was an error uploading your demo to the server. Please try again later.', 'red');</script>";
+            Log::add("e", "Demo Upload Failed", "A demo failed to upload for a submission from ($Email)");
+        }
+    }
 }
 
-require_once(INCLUDES_PATH.'/CServerControl.php');
-$sinfo = new CServerControl();
-
-if (!isset($_POST['subban']) || $_POST['subban'] != 1)
-{
-	$SteamID = "";
-	$BanIP = "";
-	$PlayerName = "";
-	$BanReason = "";
-	$SubmitterName = "";
-	$Email = "";
-	$SID = -1;
-}
-else
-{
-	$SteamID = trim(htmlspecialchars($_POST['SteamID']));
-	$BanIP = trim(htmlspecialchars($_POST['BanIP']));
-	$PlayerName = htmlspecialchars($_POST['PlayerName']);
-	$BanReason = htmlspecialchars($_POST['BanReason']);
-	$SubmitterName = htmlspecialchars($_POST['SubmitName']);
-	$Email = trim(htmlspecialchars($_POST['EmailAddr']));
-	$SID = (int)$_POST['server'];
-	$validsubmit = true;
-	$errors = "";
-	if((strlen($SteamID)!=0 && $SteamID != "STEAM_0:") && !validate_steam($SteamID))
-	{
-		$errors .= '* Введите реальный STEAM ID.<br>';
-		$validsubmit = false;
-	}
-	if(strlen($BanIP)!=0 && !validate_ip($BanIP))
-	{
-		$errors .= '* Введите реальный IP-address.<br>';
-		$validsubmit = false;
-	}
-	if (strlen($PlayerName) == 0)
-	{
-		$errors .= '* Вы должны ввести ник игрока<br>';
-		$validsubmit = false;
-	}
-	if (strlen($BanReason) == 0)
-	{
-		$errors .= '* Вы должны ввести причину бана<br>';
-		$validsubmit = false;
-	}
-	if (!check_email($Email))
-	{
-		$errors .= '* Вы должны ввести ваш E-mail<br>';
-		$validsubmit = false;
-	}
-	if($SID == -1)
-	{
-		$errors .= '* Выберите сервер.<br>';
-		$validsubmit = false;
-	}
-	if(!empty($_FILES['demo_file']['name']))
-	{
-		if(!CheckExt($_FILES['demo_file']['name'], "zip") && !CheckExt($_FILES['demo_file']['name'], "rar") && !CheckExt($_FILES['demo_file']['name'], "dem") &&
-		   !CheckExt($_FILES['demo_file']['name'], "7z") && !CheckExt($_FILES['demo_file']['name'], "bz2") && !CheckExt($_FILES['demo_file']['name'], "gz"))
-		{
-			$errors .= '* Формат файла должен быть zip, rar, 7z, bz2 или gz.<br>';
-			$validsubmit = false;
-		}
-	}
-	$checkres = $GLOBALS['db']->Execute("SELECT length FROM ".DB_PREFIX."_bans WHERE authid = ? AND RemoveType IS NULL", array($SteamID));
-	$numcheck = $checkres->RecordCount();
-	if($numcheck == 1 && $checkres->fields['length'] == 0)
-	{
-		$errors .= '* Игрок уже забанен навсегда.<br>';
-		$validsubmit = false;
-	}
-
-
-	if(!$validsubmit)
-		CreateRedBox("Ошибка", $errors);
-
-	if ($validsubmit)
-	{
-		$filename = md5($SteamID.time());
-		//echo SB_DEMOS."/".$filename;
-		$demo = move_uploaded_file($_FILES['demo_file']['tmp_name'],SB_DEMOS."/".$filename);
-		if($demo || empty($_FILES['demo_file']['name']))
-		{
-			if($SID!=0) {
-				$res = $GLOBALS['db']->GetRow("SELECT ip, port FROM ".DB_PREFIX."_servers WHERE sid = $SID");
-				
-				$sinfo->Connect($res[0],$res[1]);
-				
-				$info = $sinfo->GetInfo();
-				if($info)
-					$mailserver = "Сервер: " . $info['HostName'] . " (" . $res[0] . ":" . $res[1] . ")\n";
-				else
-					$mailserver = "Сервер: Ошибка соединения (" . $res[0] . ":" . $res[1] . ")\n";
-				$modid = $GLOBALS['db']->GetRow("SELECT m.mid FROM `".DB_PREFIX."_servers` as s LEFT JOIN `".DB_PREFIX."_mods` as m ON m.mid = s.modid WHERE s.sid = '".$SID."';");
-			} else {
-				$mailserver = "Сервер: Другой сервер\n";
-				$modid[0] = 0;
-			}
-			if($SteamID == "STEAM_0:") $SteamID = "";
-			$pre = $GLOBALS['db']->Prepare("INSERT INTO ".DB_PREFIX."_submissions(submitted,SteamId,name,email,ModID,reason,ip,subname,sip,archiv,server) VALUES (UNIX_TIMESTAMP(),?,?,?,?,?,?,?,?,0,?)");
-			$GLOBALS['db']->Execute($pre,array($SteamID,$PlayerName,$Email,$modid[0],$BanReason, $_SERVER['REMOTE_ADDR'], $SubmitterName, $BanIP, $SID));
-			$subid = (int)$GLOBALS['db']->Insert_ID();
-
-			if(!empty($_FILES['demo_file']['name']))
-				$GLOBALS['db']->Execute("INSERT INTO ".DB_PREFIX."_demos(demid,demtype,filename,origname) VALUES (?, 'S', ?, ?)", array($subid, $filename, $_FILES['demo_file']['name']));
-			$SteamID = "";
-			$BanIP = "";
-			$PlayerName = "";
-			$BanReason = "";
-			$SubmitterName = "";
-			$Email = "";
-			$SID = -1;
-
-			// Send an email when ban was posted
-			$headers = 'From: submission@' . $_SERVER['HTTP_HOST'] . "\n" . 'X-Mailer: PHP/' . phpversion();
-
-			$admins = $userbank->GetAllAdmins();
-			$requri = substr($_SERVER['REQUEST_URI'], 0, strrpos($_SERVER['REQUEST_URI'], ".php")-5);
-			foreach($admins AS $admin)
-			{
-				$message = "";
-				$message .= "Приветствую, " . $admin['user'] . ",\n\n";
-				$message .= "Поступила новая жалоба на игрока в вашей системе SourceBans:\n\n";
-				$message .= "Игрок: ".$_POST['PlayerName']." (".$_POST['SteamID'].")\nДемо: ".(empty($_FILES['demo_file']['name'])?'Отсутствует':'Присутствует (http://' . $_SERVER['HTTP_HOST'] . $requri . 'getdemo.php?type=S&id='.$subid.')')."\n".$mailserver."Причина: ".$_POST['BanReason']."\n\n";
-				$message .= "Кликните по ссылке для просмотра жалобы.\n\nhttp://" . $_SERVER['HTTP_HOST'] . $requri . "index.php?p=admin&c=bans#^2";
-				if($userbank->HasAccess(ADMIN_OWNER|ADMIN_BAN_SUBMISSIONS, $admin['aid']) && $userbank->HasAccess(ADMIN_NOTIFY_SUB, $admin['aid']))
-					mail($admin['email'], "[SourceBans] Добавлена жалоба на игрока", $message, $headers);
-			}
-			CreateGreenBox("Успешно", "Ваша жалоба была добавлена в базу данных, и будет рассмотрена одним из админов");
-		}
-		else
-		{
-			CreateRedBox("Ошибка", "Ошибка загрузки демо. попробуйте позже.");
-			$log = new CSystemLog("e", "Ошибка загрузки демо", "Ошибка загрузки демо для заявки на бан от (". $Email . ")");
-		}
-	}
-}
-
-//$mod_list = $GLOBALS['db']->GetAssoc("SELECT mid,name FROM ".DB_PREFIX."_mods WHERE `mid` > 0 AND `enabled`= 1 ORDER BY mid ");
 //serverlist
-$server_list = $GLOBALS['db']->Execute("SELECT sid, ip, port FROM `" . DB_PREFIX . "_servers` WHERE enabled = 1 ORDER BY modid, sid");
-$servers = array();
-while (!$server_list->EOF)
-{
-	$info = array();
-	$sinfo->Connect($server_list->fields[1], $server_list->fields[2]);
-	$info = $sinfo->GetInfo();
-	if(!$info)
-		$info['HostName'] = "Ошибка соединения (" . $server_list->fields[1] . ":" . $server_list->fields[2] . ")";
-	$info['sid'] = $server_list->fields[0];
-	array_push($servers,$info);
-	$server_list->MoveNext();
+$GLOBALS['PDO']->query("SELECT sid, ip, port FROM `:prefix_servers` WHERE enabled = 1 ORDER BY modid, sid");
+$servers = $GLOBALS['PDO']->resultset();
+
+foreach ($servers as $key => $server) {
+    $query = new SourceQuery();
+    try {
+        $query->Connect($server['ip'], $server['port'], 1, SourceQuery::SOURCE);
+        $info = $query->GetInfo();
+        $servers[$key]['hostname'] = $info['HostName'];
+    } catch (Exception $e) {
+        $servers[$key]['hostname'] = "Error Connecting (".$server['ip'].":".$server['port'].")";
+    } finally {
+        $query->Disconnect();
+    }
 }
 
-$theme->assign('STEAMID',		$SteamID==""?"STEAM_0:":$SteamID);
-$theme->assign('ban_ip',			$BanIP);
-$theme->assign('ban_reason',	$BanReason);
-$theme->assign('player_name',	$PlayerName);
-$theme->assign('subplayer_name',$SubmitterName);
-$theme->assign('player_email',	$Email);
-$theme->assign('server_list',		$servers);
-$theme->assign('server_selected',	$SID);
+$theme->assign('STEAMID', $SteamID == "" ? "STEAM_0:" : $SteamID);
+$theme->assign('ban_ip', $BanIP);
+$theme->assign('ban_reason', $BanReason);
+$theme->assign('player_name', $PlayerName);
+$theme->assign('subplayer_name', $SubmitterName);
+$theme->assign('player_email', $Email);
+$theme->assign('server_list', $servers);
+$theme->assign('server_selected', $SID);
 
 $theme->display('page_submitban.tpl');
-?>

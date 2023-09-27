@@ -1,15 +1,15 @@
-<?php 
-if(!defined("IN_SB")){echo "Ошибка доступа!";die();} 
+<?php
+if (!defined("IN_SB")) {
+    echo "You should not be here. Only follow links!";
+    die();
+}
 ?>
-
-<div class="col-xs-12 p-b-10">
-<table width="100%" border="0" id="group.name">
+<table width="90%" border="0" id="group.name" cellpadding="5">
   <tr>
-    <td width="15%">Имя группы:</td>
-    <td>
+    <td width="445"><div align="right">Group Name: </div></td>
+    <td><div align="left">
        <input type="text" class="submit-fields" id="{name}" name="{name}" />
        <div id="{name}_err" class="badentry"></div>
-    </td>
+    </div></td>
   </tr>
- </table>
-</div>
+  </table>

@@ -1,35 +1,25 @@
 <?php
-// *************************************************************************
-//  This file is part of SourceBans++.
-//
-//  Copyright (C) 2014-2016 Sarabveer Singh <me@sarabveer.me>
-//
-//  SourceBans++ is free software: you can redistribute it and/or modify
-//  it under the terms of the GNU General Public License as published by
-//  the Free Software Foundation, per version 3 of the License.
-//
-//  SourceBans++ is distributed in the hope that it will be useful,
-//  but WITHOUT ANY WARRANTY; without even the implied warranty of
-//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-//  GNU General Public License for more details.
-//
-//  You should have received a copy of the GNU General Public License
-//  along with SourceBans++. If not, see <http://www.gnu.org/licenses/>.
-//
-//  This file is based off work covered by the following copyright(s):  
-//
-//   SourceBans 1.4.11
-//   Copyright (C) 2007-2015 SourceBans Team - Part of GameConnect
-//   Licensed under GNU GPL version 3, or later.
-//   Page: <http://www.sourcebans.net/> - <https://github.com/GameConnect/sourcebansv1>
-//
-// *************************************************************************
- 
- global $theme;
- 
- $admin_list = $GLOBALS['db']->GetAll("SELECT * FROM `" . DB_PREFIX . "_admins` ORDER BY user ASC");
- $theme->assign('admin_list', $admin_list);
- 
- $theme->display('box_admin_log_search.tpl');
- 
-?>
+/*************************************************************************
+This file is part of SourceBans++
+
+SourceBans++ (c) 2014-2023 by SourceBans++ Dev Team
+
+The SourceBans++ Web panel is licensed under a
+Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
+
+You should have received a copy of the license along with this
+work.  If not, see <http://creativecommons.org/licenses/by-nc-sa/3.0/>.
+
+This program is based off work covered by the following copyright(s):
+SourceBans 1.4.11
+Copyright © 2007-2014 SourceBans Team - Part of GameConnect
+Licensed under CC-BY-NC-SA 3.0
+Page: <http://www.sourcebans.net/> - <http://www.gameconnect.net/>
+*************************************************************************/
+
+global $theme;
+
+$admin_list = $GLOBALS['db']->GetAll("SELECT * FROM `" . DB_PREFIX . "_admins` ORDER BY user ASC");
+$theme->assign('admin_list', $admin_list);
+
+$theme->display('box_admin_log_search.tpl');

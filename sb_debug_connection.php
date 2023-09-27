@@ -1,131 +1,127 @@
 <?php
-// *************************************************************************
-//  This file is part of SourceBans++.
-//
-//  Copyright (C) 2014-2016 Sarabveer Singh <me@sarabveer.me>
-//
-//  SourceBans++ is free software: you can redistribute it and/or modify
-//  it under the terms of the GNU General Public License as published by
-//  the Free Software Foundation, per version 3 of the License.
-//
-//  SourceBans++ is distributed in the hope that it will be useful,
-//  but WITHOUT ANY WARRANTY; without even the implied warranty of
-//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-//  GNU General Public License for more details.
-//
-//  You should have received a copy of the GNU General Public License
-//  along with SourceBans++. If not, see <http://www.gnu.org/licenses/>.
-//
-//  This file is based off work covered by the following copyright(s):  
-//
-//   SourceBans 1.4.11
-//   Copyright (C) 2007-2015 SourceBans Team - Part of GameConnect
-//   Licensed under GNU GPL version 3, or later.
-//   Page: <http://www.sourcebans.net/> - <https://github.com/GameConnect/sourcebansv1>
-//
-// *************************************************************************
+/*************************************************************************
+This file is part of SourceBans++
+
+SourceBans++ (c) 2014-2023 by SourceBans++ Dev Team
+
+The SourceBans++ Web panel is licensed under a
+Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
+
+You should have received a copy of the license along with this
+work.  If not, see <http://creativecommons.org/licenses/by-nc-sa/3.0/>.
+
+This program is based off work covered by the following copyright(s):
+SourceBans 1.4.11
+Copyright © 2007-2014 SourceBans Team - Part of GameConnect
+Licensed under CC-BY-NC-SA 3.0
+Page: <http://www.sourcebans.net/> - <http://www.gameconnect.net/>
+ *************************************************************************/
 /**
  * SourceBans "Error Connecting()" Debug
  * Checks for the ports being forwarded correctly
  */
 
-/** 
- * Конфиг
- * Смените IP и порт, если хотите протестировать соединение.
+/**
+ * Config part
+ * Change to IP and port of the gameserver you want to test
  */
-$serverip = "";
+$serverip   = "";
 $serverport = 27015;
-$serverrcon = ""; // Указывайте RCON-пароль, если хотите проверить так же возможность управления сервером из веб-панели SourceBans
+// You only need to specify this if you want to test the rcon tcp connection
+// Leave blank if it's only the serverinfo erroring.
+$serverrcon = "";
 
 
-/******* Ничего не изменяйте после этой линии *******/
-header("Content-Type: text/plain");
+/*******
+ * Don't change below here 
+*******/
 
-if(empty($serverip) || empty($serverport))
-	die('[-] Не указана информация о сервере. Откройте текстовым редактором этот файл, пропишите в нём IP и порт, сохраните и загрузите обратно на сервер.');
+if (empty($serverip) || empty($serverport)) {
+    die('[-] No server information set. Open up this file and specify your gameserver\'s IP and port.');
+}
 
-echo '[+] SourceBans "DebugConnection()" запущен для сервера ' . $serverip . ':' . $serverport . "\n\n";
+echo '[+] SourceBans "Error Connecting()" Debug starting for server ' . $serverip . ':' . $serverport . '<br /><br />';
 
-// Попытаемся установить соединение
-echo '[+] Открываю UDP-сокет...'.PHP_EOL;
+// Check for UDP connection being available and writable
+echo '[+] Trying to establish UDP connection<br />';
 $sock = @fsockopen("udp://" . $serverip, $serverport, $errno, $errstr, 2);
 
 $isBanned = false;
 
-if(!$sock)
-    echo '[-] Ошибка соединения. #' . $errno . ': ' . $errstr . PHP_EOL;
-else {
-    echo '[+] UDP-соединение успешно установлено!'.PHP_EOL;
+if (!$sock) {
+    echo '[-] Error connecting #' . $errno . ': ' . $errstr . '<br />';
+} else {
+    echo '[+] UDP connection successfull!<br />';
 
     stream_set_timeout($sock, 1);
-
-    // Попытаемся получить информацию у сервера
-    echo '[+] Записываю запрос в сокет..'.PHP_EOL;
-    if(fwrite($sock, "\xFF\xFF\xFF\xFF\x54Source Engine Query\0") === false)
-        echo '[-] Ошибка записи.'.PHP_EOL;
-    else {
-        echo '[+] Запрос успешно записан в сокет. (Это не означает, что с соединением всё в порядке.) Читаю ответ...'.PHP_EOL;
+    // Try to get serverinformation
+    echo '[+] Trying to write to the socket<br />';
+    $written = fwrite($sock, "\xFF\xFF\xFF\xFF\x54Source Engine Query\0");
+    if ($written === false) {
+        echo '[-] Error writing.<br />';
+    } else {
+        echo '[+] Successfully requested server info. (That doesn\'t mean anything on an UDP stream.) Reading...<br />';
         $packet = fread($sock, 1480);
 
-        if(empty($packet))
-            echo '[-] Ошибка при получении информации о сервере. Не удаётся прочитать UDP-соединение. Порт заблокирован.'.PHP_EOL;
-        else {
-            if(substr($packet, 5, (strpos(substr($packet, 5), "\0")-1)) == "Banned by server") {
-                printf('[-] Ответ получен, но веб-сервер заблокирован. Удалите блокировку с сервера (removeip %s), и повторите попытку.%s', $_SERVER['SERVER_ADDR'], PHP_EOL);
+        if (empty($packet)) {
+            echo '[-] Error getting server info. Can\'t read from UDP stream. Port is possibly blocked.<br />';
+        } else {
+            if (substr($packet, 5, (strpos(substr($packet, 5), "\0") - 1)) == "Banned by server") {
+                echo '[-] Got an response, but this webserver\'s ip is banned by the server.<br />';
                 $isBanned = true;
             } else {
-                $packet = substr($packet, 6);
+                $packet   = substr($packet, 6);
                 $hostname = substr($packet, 0, strpos($packet, "\0"));
-                echo '[+] Ответ получен! Сервер: ' . $hostname . PHP_EOL;
+                echo '[+] Got an response! Server: ' . $hostname . ' <br />';
             }
         }
     }
     fclose($sock);
 }
 
-echo PHP_EOL;
+echo '<br />';
 
-// Проверим на доступность и записываемость TCP-соединения
-echo '[+] Попытка установить TCP-соединение...'.PHP_EOL;
+// Check for TCP connection being available and writeable
+echo '[+] Trying to establish TCP connection<br />';
 $sock = @fsockopen($serverip, $serverport, $errno, $errstr, 2);
-if(!$sock)
-    echo '[-] Ошибка соединения. #' . $errno . ': ' . $errstr . PHP_EOL;
-else
-{
-    echo '[+] TCP-соединение успешно установлено!'.PHP_EOL;
-    if(empty($serverrcon))
-        echo '[o] Прерываю работу. RCON-пароль не установлен.';
-    else if($isBanned)
-        echo '[o] Прерываю работу. Сервер находится в блокировке.';
-    else {
+if (!$sock) {
+    echo '[-] Error connecting #' . $errno . ': ' . $errstr . '<br />';
+} else {
+    echo '[+] TCP connection successfull!<br />';
+    if (empty($serverrcon)) {
+        echo '[o] Stopping here since no rcon password specified.';
+    } else if ($isBanned) {
+        echo '[o] Stopping here since this ip is banned by the gameserver.';
+    } else {
         stream_set_timeout($sock, 2);
         $data = pack("VV", 0, 03) . $serverrcon . chr(0) . '' . chr(0);
         $data = pack("V", strlen($data)) . $data;
 
-        echo '[+] Пытаюсь записать в TCP-сокет и произвести авторизацию...'.PHP_EOL;
+        echo '[+] Trying to write to TCP socket and authenticate via rcon<br />';
+        $written = fwrite($sock, $data, strlen($data));
 
-        if(fwrite($sock, $data, strlen($data)) === false)
-            echo '[-] Ошибка записи.'.PHP_EOL;
-        else {
-            echo '[+] Запрос авторизации успешно записан. Читаю ответ...'.PHP_EOL;
+        if ($written === false) {
+            echo '[-] Error writing.<br />';
+        } else {
+            echo '[+] Successfully sent authentication request. Reading...<br />';
             $size = fread($sock, 4);
-            if(!$size)
-                echo '[-] Ошибка чтения.'.PHP_EOL;
-            else {
-                echo '[+] Ответ получен!'.PHP_EOL;
-                $size = unpack('V1Size', $size);
+            if (!$size) {
+                echo '[-] Error reading.<br />';
+            } else {
+                echo '[+] Got an response! <br />';
+                $size   = unpack('V1Size', $size);
                 $packet = fread($sock, $size["Size"]);
-                $size = fread($sock, 4);
-                $size = unpack('V1Size', $size);
+                $size   = fread($sock, 4);
+                $size   = unpack('V1Size', $size);
                 $packet = fread($sock, $size["Size"]);
-                $ret = unpack("V1ID/V1Reponse/a*S1/a*S2", $packet);
-                if(empty($ret) || (isset($ret['ID']) && $ret['ID'] == -1))
-                    echo '[-] RCON-пароль задан неверный ;) Не пытайтесь и дальше производить попытки, иначе ваш веб-сервер "улетит" в бан.';
-                else
-                    echo '[+] Пароль задан правильно!';
+                $ret    = unpack("V1ID/V1Reponse/a*S1/a*S2", $packet);
+                if (empty($ret) || (isset($ret['ID']) && $ret['ID'] == -1)) {
+                    echo '[-] Bad password ;) Don\'t try this too often or your webserver will get banned by the gameserver.<br />';
+                } else {
+                    echo '[+] Password correct!';
+                }
             }
         }
     }
     fclose($sock);
 }
-?>

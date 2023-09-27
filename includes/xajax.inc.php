@@ -175,9 +175,9 @@ class xajax
 	 */
 	function __construct($sRequestURI="",$sWrapperPrefix="xajax_",$sEncoding=XAJAX_DEFAULT_CHAR_ENCODING,$bDebug=false)
 	{
-		$this->aFunctions = array();
-		$this->aObjects = array();
-		$this->aFunctionIncludeFiles = array();
+		$this->aFunctions = [];
+		$this->aObjects = [];
+		$this->aFunctionIncludeFiles = [];
 		$this->sRequestURI = $sRequestURI;
 		if ($this->sRequestURI == "")
 			$this->sRequestURI = $this->_detectURI();
@@ -634,7 +634,7 @@ class xajax
 		$bFoundFunction = true;
 		$bFunctionIsCatchAll = false;
 		$sFunctionNameForSpecial = "";
-		$aArgs = array();
+		$aArgs = [];
 		$sPreResponse = "";
 		$bEndRequest = false;
 		$requestMode = $this->getRequestMode();
@@ -701,11 +701,6 @@ class xajax
 		{
 			for ($i = 0; $i < sizeof($aArgs); $i++)
 			{
-				// If magic quotes is on, then we need to strip the slashes from the args
-				if (get_magic_quotes_gpc() == 1 && is_string($aArgs[$i])) {
-				
-					$aArgs[$i] = stripslashes($aArgs[$i]);
-				}
 				if (stristr($aArgs[$i],"<xjxobj>") != false)
 				{
 					$aArgs[$i] = $this->_xmlToArray("xjxobj",$aArgs[$i]);	
@@ -755,7 +750,7 @@ class xajax
 					$oNewResponse = new xajaxResponse($this->sEncoding, $this->bOutputEntities);
 					$oNewResponse->loadXML($sPreResponse);
 					$oNewResponse->loadXML($oResponse);
-					$oResponse = $sNewResponse;
+					$oResponse = $oNewResponse;
 				}
 			}
 		}
@@ -773,7 +768,7 @@ class xajax
 					$oErrorResponse->addAlert("** Logging Error **\n\nxajax was unable to write to the error log file:\n" . $this->sLogFile);
 				}
 				else {
-					fwrite($fH, "** xajax Error Log - " . strftime("%b %e %Y %I:%M:%S %p") . " **" . $GLOBALS['xajaxErrorHandlerText'] . "\n\n\n");
+					fwrite($fH, "** xajax Error Log - " . (new DateTime())->format("%b %e %Y %I:%M:%S %p") . " **" . $GLOBALS['xajaxErrorHandlerText'] . "\n\n\n");
 					fclose($fH);
 				}
 			}
@@ -957,7 +952,7 @@ class xajax
 	 * @return string
 	 */
 	function _detectURI() {
-		$aURL = array();
+		$aURL = [];
 
 		// Try to get the request URL
 		if (!empty($_SERVER['REQUEST_URI'])) {
@@ -1033,7 +1028,7 @@ class xajax
 		}
 
 		// Add the path and the query string
-		$sURL.= $aURL['path'].@$aURL['query'];
+		$sURL.= $aURL['path'] . ($aURL['query'] ?? '');
 
 		// Clean up
 		unset($aURL);
@@ -1123,7 +1118,7 @@ class xajax
 	 */
 	function _xmlToArray($rootTag, $sXml)
 	{
-		$aArray = array();
+		$aArray = [];
 		$sXml = str_replace("<$rootTag>","<$rootTag>|~|",$sXml);
 		$sXml = str_replace("</$rootTag>","</$rootTag>|~|",$sXml);
 		$sXml = str_replace("<e>","<e>|~|",$sXml);
@@ -1153,7 +1148,7 @@ class xajax
 	 */
 	function _parseObjXml($rootTag)
 	{
-		$aArray = array();
+		$aArray = [];
 		
 		if ($rootTag == "xjxobj")
 		{
@@ -1228,18 +1223,6 @@ class xajax
 				{
 					$aArray[$key] = $this->_decodeUTF8Data($value);
 				}
-			}
-			// If magic quotes is on, then we need to strip the slashes from the
-			// array values because of the parse_str pass which adds slashes
-			if (get_magic_quotes_gpc() == 1) {
-				$newArray = array();
-				foreach ($aArray as $sKey => $sValue) {
-					if (is_string($sValue))
-						$newArray[$sKey] = stripslashes($sValue);
-					else
-						$newArray[$sKey] = $sValue;
-				}
-				$aArray = $newArray;
 			}
 		}
 		

@@ -1,141 +1,145 @@
 <?php
-// *************************************************************************
-//  This file is part of SourceBans++.
-//
-//  Copyright (C) 2014-2016 Sarabveer Singh <me@sarabveer.me>
-//
-//  SourceBans++ is free software: you can redistribute it and/or modify
-//  it under the terms of the GNU General Public License as published by
-//  the Free Software Foundation, per version 3 of the License.
-//
-//  SourceBans++ is distributed in the hope that it will be useful,
-//  but WITHOUT ANY WARRANTY; without even the implied warranty of
-//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-//  GNU General Public License for more details.
-//
-//  You should have received a copy of the GNU General Public License
-//  along with SourceBans++. If not, see <http://www.gnu.org/licenses/>.
-//
-//  This file is based off work covered by the following copyright(s):  
-//
-//   SourceBans 1.4.11
-//   Copyright (C) 2007-2015 SourceBans Team - Part of GameConnect
-//   Licensed under GNU GPL version 3, or later.
-//   Page: <http://www.sourcebans.net/> - <https://github.com/GameConnect/sourcebansv1>
-//
-// *************************************************************************
 
-$_GET['p'] = isset($_GET['p']) ? $_GET['p'] : 'default';
-$_GET['p'] = trim($_GET['p']);
-switch ($_GET['p'])
+/**
+ * @param $fallback
+ * @return array
+ * @throws ErrorException
+ */
+function route($fallback)
 {
-	case "login":
-		$page = TEMPLATES_PATH . "/page.login.php";
-		break;
-	case "logout":
-		logout();
-		Header("Location: index.php");
-		break;
-	case "admin":
-		$page = INCLUDES_PATH . "/admin.php";
-		break;
-	case "submit":
-		RewritePageTitle("Submit a Ban");
-		$page = TEMPLATES_PATH . "/page.submit.php";
-		break;
-	case "banlist":
-		RewritePageTitle("Ban List");
-		$page = TEMPLATES_PATH ."/page.banlist.php";
-		break;
-	case "commslist":
-		RewritePageTitle("Communications Block List");
-		$page = TEMPLATES_PATH ."/page.commslist.php";
-		break;
-	case "servers":
-		RewritePageTitle("Server List");
-		$page = TEMPLATES_PATH . "/page.servers.php";
-		break;
-	//case "serverinfo":
-	//	RewritePageTitle("Server Info");
-	//	$page = TEMPLATES_PATH . "/page.serverinfo.php";
-	//	break;
-	case "protest":
-		RewritePageTitle("Protest a Ban");
-		$page = TEMPLATES_PATH . "/page.protest.php";
-		break;
-	case "account":
-		RewritePageTitle("Your Account");
-		$page = TEMPLATES_PATH . "/page.youraccount.php";
-		break;
-	case "lostpassword":
-		RewritePageTitle("Lost your password");
-		$page = TEMPLATES_PATH . "/page.lostpassword.php";
-		break;
-	case "home":
-		RewritePageTitle("Dashboard");
-		$page = TEMPLATES_PATH . "/page.home.php";
-		break;
-	case "search_bans":
-		RewritePageTitle("Подробный поиск банов");
-		$page = TEMPLATES_PATH . "/page.search_bans.php";
-		break;
-	case "search_comm":
-		RewritePageTitle("Подробный поиск мутов");
-		$page = TEMPLATES_PATH . "/page.search_comms.php";
-		break;
-	case "pay":
-		RewritePageTitle("Активация");
-		$page = TEMPLATES_PATH . "/page.vay4er.php";
-		break;
-	case "adminlist":
-		RewritePageTitle("АдминЛист");
-		$page = TEMPLATES_PATH . "/page.adminlist.php";
-		break;
-	default:
-		switch($GLOBALS['config']['config.defaultpage'])
-		{
-			case 1:
-				RewritePageTitle("Ban List");
-				$page = TEMPLATES_PATH . "/page.banlist.php";
-				$_GET['p'] = "banlist";
-				break;
-			case 2:
-				RewritePageTitle("Server Info");
-				$page = TEMPLATES_PATH . "/page.servers.php";
-				$_GET['p'] = "servers";
-				break;
-			case 3:
-				RewritePageTitle("Submit a Ban");
-				$page = TEMPLATES_PATH . "/page.submit.php";
-				$_GET['p'] = "submit";
-				break;
-			case 4:
-				RewritePageTitle("Protest a Ban");
-				$page = TEMPLATES_PATH . "/page.protest.php";
-				$_GET['p'] = "protest";
-				break;
-			default: //case 0:
-				RewritePageTitle("Dashboard");
-				$page = TEMPLATES_PATH . "/page.home.php";
-				$_GET['p'] = "home";
-				break;
-		}
+    $page = filter_input(INPUT_GET, 'p', FILTER_SANITIZE_SPECIAL_CHARS);
+    $categorie = filter_input(INPUT_GET, 'c', FILTER_SANITIZE_SPECIAL_CHARS);
+    $option = filter_input(INPUT_GET, 'o', FILTER_SANITIZE_SPECIAL_CHARS);
+
+    switch ($page) {
+        case 'login':
+            switch ($option) {
+                case 'steam':
+                    require_once 'includes/auth/openid.php';
+                    new SteamAuthHandler(new LightOpenID(Host::complete()), $GLOBALS['PDO']);
+                    exit();
+                default:
+                    return ['Login', '/page.login.php'];
+            }
+        case 'logout':
+            Auth::logout();
+            header('Location: index.php?p=home');
+            exit();
+        case 'submit':
+            return ['Submit a Ban', '/page.submit.php'];
+        case 'banlist':
+            return ['Ban List', '/page.banlist.php'];
+        case 'commslist':
+            return ['Communications Block List', '/page.commslist.php'];
+        case 'servers':
+            return ['Server List', '/page.servers.php'];
+        case 'protest':
+            return ['Protest a Ban', '/page.protest.php'];
+        case 'account':
+            return ['Your Account', '/page.youraccount.php'];
+        case 'lostpassword':
+            return ['Lost your password', '/page.lostpassword.php'];
+        case 'home':
+            return ['Dashboard', '/page.home.php'];
+        case 'admin':
+            switch ($categorie) {
+                case 'groups':
+                    CheckAdminAccess(ADMIN_OWNER|ADMIN_LIST_GROUPS|ADMIN_ADD_GROUP|ADMIN_EDIT_GROUPS|ADMIN_DELETE_GROUPS);
+                    switch ($option) {
+                        case 'edit':
+                            return ['Edit Groups', '/admin.edit.group.php'];
+                        default:
+                            return ['Group Management', '/admin.groups.php'];
+                    }
+                case 'admins':
+                    CheckAdminAccess(ADMIN_OWNER|ADMIN_LIST_ADMINS|ADMIN_ADD_ADMINS|ADMIN_EDIT_ADMINS|ADMIN_DELETE_ADMINS);
+                    switch ($option) {
+                        case 'editgroup':
+                            return ['Edit Admin Groups', '/admin.edit.admingroup.php'];
+                        case 'editdetails':
+                            return ['Edit Admin Details', '/admin.edit.admindetails.php'];
+                        case 'editpermissions':
+                            return ['Edit Admin Permissions', '/admin.edit.adminperms.php'];
+                        case 'editservers':
+                            return ['Edit Server Access', '/admin.edit.adminservers.php'];
+                        default:
+                            return ['Admin Management', '/admin.admins.php'];
+                    }
+                case 'servers':
+                    CheckAdminAccess(ADMIN_OWNER|ADMIN_LIST_SERVERS|ADMIN_ADD_SERVER|ADMIN_EDIT_SERVERS|ADMIN_DELETE_SERVERS);
+                    switch ($option) {
+                        case 'edit':
+                            return ['Edit Server', '/admin.edit.server.php'];
+                        case 'rcon':
+                            return ['Server RCON', '/admin.rcon.php'];
+                        case 'admincheck':
+                            return ['Server Admins', '/admin.srvadmins.php'];
+                        default:
+                            return ['Server Management', '/admin.servers.php'];
+                    }
+                case 'bans':
+                    CheckAdminAccess(ADMIN_OWNER|ADMIN_ADD_BAN|ADMIN_EDIT_OWN_BANS|ADMIN_EDIT_GROUP_BANS|ADMIN_EDIT_ALL_BANS|ADMIN_BAN_PROTESTS|ADMIN_BAN_SUBMISSIONS);
+                    switch ($option) {
+                        case 'edit':
+                            return ['Edit Ban Details', '/admin.edit.ban.php'];
+                        case 'email':
+                            return ['Email', '/admin.email.php'];
+                        default:
+                            return ['Bans', '/admin.bans.php'];
+                    }
+                case 'comms':
+                    CheckAdminAccess(ADMIN_OWNER|ADMIN_ADD_BAN|ADMIN_EDIT_OWN_BANS|ADMIN_EDIT_ALL_BANS);
+                    switch ($option) {
+                        case 'edit':
+                            return ['Edit Block Details', '/admin.edit.comms.php'];
+                        default:
+                            return ['Comms', '/admin.comms.php'];
+                    }
+                case 'mods':
+                    CheckAdminAccess(ADMIN_OWNER|ADMIN_LIST_MODS|ADMIN_ADD_MODS|ADMIN_EDIT_MODS|ADMIN_DELETE_MODS);
+                    switch ($option) {
+                        case 'edit':
+                            return ['Edit Mod Details', '/admin.edit.mod.php'];
+                        default:
+                            return ['Manage Mods', '/admin.mods.php'];
+                    }
+                case 'settings':
+                    CheckAdminAccess(ADMIN_OWNER|ADMIN_WEB_SETTINGS);
+                    return ['SourceBans++ Settings', '/admin.settings.php'];
+                default:
+                    CheckAdminAccess(ALL_WEB);
+                    return ['Administration', '/page.admin.php'];
+        }
+        default:
+            switch ($fallback) {
+                case 1:
+                    $_GET['p'] = 'banlist';
+                    return ['Ban List', '/page.banlist.php'];
+                case 2:
+                    $_GET['p'] = 'servers';
+                    return ['Server Info', '/page.servers.php'];
+                case 3:
+                    $_GET['p'] = 'submit';
+                    return ['Submit a Ban', '/page.submit.php'];
+                case 4:
+                    $_GET['p'] = 'protest';
+                    return ['Protest a Ban', '/page.protest.php'];
+                default:
+                    $_GET['p'] = 'home';
+                    return ['Dashboard', '/page.home.php'];
+            }
+    }
 }
 
-// Начинаем буферизовать вывод. Необходимо для более корректной работы хандлера ошибок.
-ob_start();
-
-// Подключаем графический фреймворк
-require_once(INCLUDES_PATH . "/theme_framework.php");
-
-global $ui;
-$ui = new CUI();
-BuildPageHeader();
-BuildPageTabs();
-BuildSubMenu();
-BuildContHeader();
-BuildBreadcrumbs();
-if(!empty($page))
-	include $page;
-include_once(TEMPLATES_PATH . '/footer.php');
-?>
+/**
+ * @param null $title Unused
+ * @param string $page
+ */
+function build(string $title, string $page)
+{
+    require_once(TEMPLATES_PATH.'/core/header.php');
+    require_once(TEMPLATES_PATH.'/core/navbar.php');
+    require_once(TEMPLATES_PATH.'/core/title.php');
+    require_once(TEMPLATES_PATH.$page);
+    require_once(TEMPLATES_PATH.'/core/footer.php');
+}

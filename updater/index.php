@@ -2,7 +2,7 @@
 // *************************************************************************
 //  This file is part of SourceBans++.
 //
-//  Copyright (C) 2014-2016 Sarabveer Singh <me@sarabveer.me>
+//  Copyright (C) 2014-2019 SourceBans++ Dev Team <https://github.com/sbpp>
 //
 //  SourceBans++ is free software: you can redistribute it and/or modify
 //  it under the terms of the GNU General Public License as published by
@@ -16,7 +16,7 @@
 //  You should have received a copy of the GNU General Public License
 //  along with SourceBans++. If not, see <http://www.gnu.org/licenses/>.
 //
-//  This file is based off work covered by the following copyright(s):  
+//  This file is based off work covered by the following copyright(s):
 //
 //   SourceBans 1.4.11
 //   Copyright (C) 2007-2015 SourceBans Team - Part of GameConnect
@@ -25,33 +25,20 @@
 //
 // *************************************************************************
 
- define('IS_UPDATE', true);
- include "../init.php";
- $theme->clear_compiled_tpl();
+define('IS_UPDATE', true);
+include "../init.php";
 
- define('IS_AJAX',   isset($_GET['updater_ajax_call']));
+require_once('Updater.php');
+$updater = new Updater($GLOBALS['PDO']);
 
- include INCLUDES_PATH . "/CUpdate.php";
- $updater = new CUpdater();
- 
- $setup = "Проверка текущей версии SourceBans...<b> " . $updater->getCurrentRevision() . "</b>";
- if(!$updater->needsUpdate())
- {
-	if (IS_AJAX)
-		die(json_encode(['result' => false, 'reason' => "Система в обновлениях не нуждается."]));
-	$setup .= "<br /><br />Обновления не нужны. Удалите папку <b>updater</b>!";
-	$theme->assign('setup', $setup);
-	$theme->assign('progress', "");
-	$theme->display('updater.tpl');
-	die();
- }
- $setup .= "<br />Обновление до версии: <b>" . $updater->getLatestPackageVersion() . "</b>";
- 
- $progress = $updater->doUpdates();
- 
- if (IS_AJAX)
-	die(json_encode(['result' => true]));
- $theme->assign('setup', $setup);
- $theme->assign('progress', $progress);
- $theme->display('updater.tpl');
-?>
+$theme->assign('updates', $updater->getMessageStack());
+$theme->display('updater.tpl');
+
+//clear compiled themes
+$cachedir = dir(SB_CACHE);
+while (($entry = $cachedir->read()) !== false) {
+    if (is_file($cachedir->path . $entry)) {
+        unlink($cachedir->path . $entry);
+    }
+}
+$cachedir->close();

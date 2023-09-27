@@ -1,62 +1,91 @@
-<?php 
-// *************************************************************************
-//  This file is part of SourceBans++.
-//
-//  Copyright (C) 2014-2016 Sarabveer Singh <me@sarabveer.me>
-//
-//  SourceBans++ is free software: you can redistribute it and/or modify
-//  it under the terms of the GNU General Public License as published by
-//  the Free Software Foundation, per version 3 of the License.
-//
-//  SourceBans++ is distributed in the hope that it will be useful,
-//  but WITHOUT ANY WARRANTY; without even the implied warranty of
-//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-//  GNU General Public License for more details.
-//
-//  You should have received a copy of the GNU General Public License
-//  along with SourceBans++. If not, see <http://www.gnu.org/licenses/>.
-//
-//  This file is based off work covered by the following copyright(s):  
-//
-//   SourceBans 1.4.11
-//   Copyright (C) 2007-2015 SourceBans Team - Part of GameConnect
-//   Licensed under GNU GPL version 3, or later.
-//   Page: <http://www.sourcebans.net/> - <https://github.com/GameConnect/sourcebansv1>
-//
-// *************************************************************************
+<?php
+/*************************************************************************
+This file is part of SourceBans++
 
-if(!defined("IN_SB")){echo "Ошибка доступа!";die();}
-RewritePageTitle("Вход администратора");
+SourceBans++ (c) 2014-2023 by SourceBans++ Dev Team
+
+The SourceBans++ Web panel is licensed under a
+Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
+
+You should have received a copy of the license along with this
+work.  If not, see <http://creativecommons.org/licenses/by-nc-sa/3.0/>.
+
+This program is based off work covered by the following copyright(s):
+SourceBans 1.4.11
+Copyright © 2007-2014 SourceBans Team - Part of GameConnect
+Licensed under CC-BY-NC-SA 3.0
+Page: <http://www.sourcebans.net/> - <http://www.gameconnect.net/>
+*************************************************************************/
+
+if (!defined("IN_SB")) {
+    echo "You should not be here. Only follow links!";
+    die();
+}
 
 global $userbank, $theme;
-//$submenu = array( array( "title" => 'Забыл пароль?', "url" => 'index.php?p=lostpassword' ) );
-//SubMenu( $submenu );
-if(isset($_GET['m']) && $_GET['m'] == "no_access")
-	echo "<script>setTimeout(\"ShowBox('Ошибка - Нет доступа', 'У вас нет доступа к этой странице.<br />Войдите в аккаунт.', 'red', '', false);\", 1200);</script>";
+if (isset($_GET['m'])) {
+    $lostpassword_url = Host::complete() . '/index.php?p=lostpassword';
+    switch ($_GET['m']) {
+        case 'no_access':
+            echo <<<HTML
+				<script>
+					ShowBox(
+						'Error - No Access',
+						'You dont have permission to access this page.<br />' +
+						'Please login with an account that has access.',
+						'red', '', false
+					);
+				</script>
+HTML;
+            break;
 
-	
-//$theme->assign('redir', "DoLogin('".(isset($_SESSION['q'])?$_SESSION['q']:'')."');");
-$theme->assign('redir', "DoLogin('p=account'); '".(isset($_SESSION['q'])?$_SESSION['q']:'')."';");
+        case 'empty_pwd':
+            echo <<<HTML
+				<script>
+					ShowBox(
+						'Information',
+						'You are unable to login because your account have an empty password set.<br />' +
+						'Please <a href="$lostpassword_url">restore your password</a> or ask an admin to do that for you.<br />' +
+						'Do note that you are required to have a non empty password set event if you sign in through Steam.',
+						'blue', '', true
+					);
+				</script>
+HTML;
+            break;
 
-// === Authorization by type - START ===
-/**
- * Available AuthType
- *
- * 0 - Default (login-password and Steam)
- * 1 - Only login-password
- * 2 - Only Steam
- **/
-$at = isset($GLOBALS['config']['auth.type'])?$GLOBALS['config']['auth.type']:0;
-$theme->assign('steam_allowed', ($at != 1));
-$theme->assign('login_allowed', ($at != 2));
-// === Authorization by type -  END  ===
+        case 'failed':
+            echo <<<HTML
+    			<script>
+    				ShowBox(
+                        'Error',
+    					'The username or password you supplied was incorrect.<br \>'+
+                        'If you have forgotten your password, use the <a href="$lostpassword_url">Lost Password</a> link.',
+    					'red', '', false
+    				);
+    			</script>
+HTML;
+            break;
 
-$theme->left_delimiter = "-{";
+        case 'steam_failed':
+            echo <<<HTML
+                <script>
+                    ShowBox(
+                        'Error',
+                        'Steam login was sucessful, but your SteamID isn\'t associated with any account.',
+                        'red', '', false
+                    );
+                </script>
+HTML;
+            break;
+    }
+
+
+}
+
+$theme->assign('steamlogin_show', Config::getBool('config.enablesteamlogin'));
+$theme->assign('redir', "DoLogin('');");
+$theme->left_delimiter  = "-{";
 $theme->right_delimiter = "}-";
 $theme->display('page_login.tpl');
-$theme->left_delimiter = "{";
+$theme->left_delimiter  = "{";
 $theme->right_delimiter = "}";
-?>
-</div>
-</div>
-</div>
